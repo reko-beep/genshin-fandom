@@ -38,13 +38,18 @@ class ExtendURL:
     url -> return yarl URL object
     
     '''
-    BASE_URL = URL('https://genshin-impact.fandom.com/wiki') 
+    BASE_URL = 'https://genshin-impact.fandom.com/wiki/' 
 
     def __init__(self, name) -> URL:
-        self.url = ExtendURL.BASE_URL / name
+        if 'wiki' in name:
+            name = name.replace("/wiki/",'',1)
+        self.url = f'{ExtendURL.BASE_URL}{name}'
 
     def __repr__(self) -> str:
         return self.url
+    
+    def __str__(self) -> str:
+        return str(self.url)
 
 '''
 
@@ -103,5 +108,5 @@ SCRAPERS = ScraperManager(character='CharacterScraper')
 
 
 
-
+IMG_NOT_FOUND = 'https://bsmedia.business-standard.com/_media/bs/img/about-page/thumb/464_464/1599716993.jpg'
     

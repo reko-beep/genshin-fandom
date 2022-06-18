@@ -5,16 +5,20 @@ abc BaseScraper class
 All scrapers inherit from this class
 
 '''
+from abc import ABC, abstractmethod
 from os.path import exists
 from os import makedirs, getcwd
 from json import load, dump
-from munch import munchify
+from typing import TYPE_CHECKING
+from munch import Munch, munchify
 from datetime import datetime 
 
-class BaseScraper:
+
+class BaseScraper(ABC):
     
 
     def __init__(self):
+        self.update()
         pass
 
 
@@ -53,7 +57,7 @@ class BaseScraper:
         with open(file, 'r') as f:
             dump(data, f, indent=1)
 
-
+    
 
     def update(self):
         '''
@@ -72,7 +76,7 @@ class BaseScraper:
         '''
 
         file = self.__dict__.get('folderpath', getcwd()+"/db")+"/"+self.__dict__.get('filename', 'temp.json')
-
+       
         if exists(file):
             data = {}
             with open(file, 'r') as f:
@@ -80,7 +84,7 @@ class BaseScraper:
 
             if (datetime.now()-datetime.strptime(data['time'], '%c')).seconds > 3600:
 
-                scrape_func = self.__dict__.get("scraper", None)
+                scrape_func = self.__dict__.get("scrape", None)
                 if scrape_func is not None:
                     return scrape_func()     
 
@@ -89,10 +93,17 @@ class BaseScraper:
                 self.__dict__['data'] = munchify(data)
 
         else:
-
-            scrape_func = self.__dict__.get("scraper", None)
+            scrape_func = self.__getattribute__('scrape')
             if scrape_func is not None:
                 return scrape_func()     
+
+    @abstractmethod
+    def scrape(self):
+        '''
+        scraping script in base classes
+        '''
+        raise NotImplementedError
+
 
     @property
     def data(self):
@@ -101,7 +112,7 @@ class BaseScraper:
         returns a munch object of the scraped / fetched data
 
         '''
-
+        print(self.__dict__)
         checker = self.__dict__.get('data', None)
         if checker is  None:
             return munchify({'error': 'Not yet fetched!'})
@@ -109,6 +120,12 @@ class BaseScraper:
             return munchify(checker)
 
         
+    @property
+    def attrs(self):
+        '''
 
+        returns list of attrs accessible
+
+        '''
+        return [k for k in self.__dict__ if k != 'client']
     
-

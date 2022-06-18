@@ -1,12 +1,20 @@
 
+from __future__ import annotations
 from distutils.command.clean import clean
 import typing
+from bs4 import BeautifulSoup
+from typing import TYPE_CHECKING
 
 from requests_cache import CachedSession
 from datetime import timedelta
 
 from yarl import URL
-from constants import SCRAPERS
+from constants import SCRAPERS, ExtendURL
+from constants import *
+
+if TYPE_CHECKING:
+    from scrapers.character import CharacterScraper
+
 class Client:
     
     def __init__(self):
@@ -25,54 +33,142 @@ class Client:
         stale_if_error=True,               # In case of request errors, use stale cache data if possible
     )
 
+        self.characters = self._character_lists()
 
-    def generate_id(self, string: str) -> str:
-        '''
-
-        Generates id from a string
-        useful to compare items 
-
-        '''
-        seperators = [',','.','/','\\',':',';','-','`','~',"'",'"', '%20', '%27','%22', '%']
-
-        for sep in seperators:
-            string = string.replace(sep, '', 99)
-        
-        return string.lower().replace(' ', '_',99)
-    
-
-    def search(self, string: str, strings_list: str, one_result: bool = False, split_search: bool = False) -> typing.Union[str, list]:
-        '''
-        Searches a string in strings list provided
-        returns none if nothing is found
-        '''
-
-        results = []
-
-        string = string.lower()
-        for item in strings_list:
-            splitted = string.split(" ") if split_search else  [string]
-            for string_provided in splitted:
-                if string_provided in item.lower():
-                    results.append(item)
-        
-        if len(results) == 0:
-            return None
-        return results[0] if one_result else results
 
     def get_source_code(self, link: URL):
-
+    
         '''
         gets source code of the page
         '''
 
         return self.session.get(link).content
+
     
 
-    def _get_scraper(self,
+    def get_scraper(self,
                      name: str):
+        '''
+
+        Private function of client
+        gets the scraper depending on the name
+
+        ----
+        parameters
+        ----
+
+        name: module name
+        '''
 
         scraper =  SCRAPERS.get(name)
         return scraper
 
+    def get_table(self, bs : BeautifulSoup,
+                    id_ : str):
+
+        '''
+
+        Private function of client
+        gets the table from Beautiful soup object
+
+        ----
+        parameters
+        ----
+
+        id_ : id of the h2 element
+        '''
+        
+        table_ = bs.find("span", {"id": id_})
+        if table_ is not None:
+            element = table_.parent.find_next_sibling()
+            while element.name != 'table':
+                element = element.find_next_sibling()
+            else:
+                return element
+        return None
+
+    def filter_item(self, 
+                        title_string: str, list_: typing.List[BaseItem]):
+        '''
+        returns a item if it exists
+
+        from list of BaseItem
+
+        ---
+        params
+        ---
+        title_string: title to search for
+        list_ : list of BaseItem
+        '''
+        for item in list_:
+            if title_string.lower() in item.title.lower():
+                return item
+
+
+    def _character_lists(self) -> typing.Union[typing.List[BaseItem], None]:
+        '''
+
+        fetches all characters list from fandom
+
+        '''
+        src = self.get_source_code(CHARACTER)
+        bs = BeautifulSoup(src, 'lxml')
+        tables = [self.get_table(bs, 'Upcoming_Playable_Characters'), self.get_table(bs, 'Playable_Characters')]
+  
+        list_ = []        
+        for table in tables:
+            if table is not None:
+                rows = table.find_all('tr')[1:]
+                for r in rows:
+                    columns = r.find_all('td')
+                    if len(columns) >= 5:
+                        title = columns[1].text.strip()
+                        link = ExtendURL(columns[1].find('a').attrs['href']).url
+                        list_.append(BaseItem(client=self, 
+                                            title=title,
+                                            url=link,
+                                            type_module='character'))      
+
+       
+
+        return list_
+
+class BaseItem:
+    '''
+    BaseItem
+
+    can be anything character, weapon, materials, wishes etc
+
+    '''
+
+    def __init__(self, client: Client, title: str, url: str, type_module: str) -> None:
+        self.client = client
+        self.title = title
+        self.url = url
+        self.type_module = type_module
+
+    def __repr__(self) -> str:
+        string = ' '.join([f"{k}={self.__dict__[k]}" for k in  self.__dict__])
+        return f"<{self.type_module.title()} {string}>"
+
+    def get_data(self) -> CharacterScraper: 
+        '''
+
+        Stores | returns the data of a specific item
+
+        you can do .attrs to see available attrs of the object
+
+        .data returns the whole data
+
+        '''
+
+        scraper = self.client.get_scraper(self.type_module)
+        if scraper is not None:
+            return scraper(self.client, self.url)
+
+
+
+test = Client()
+test_char_obj = test.filter_item('albedo', test.characters)
+albedo_data = test_char_obj.get_data()
 
